@@ -349,7 +349,7 @@ export default function Home() {
   position: "relative",
   overflow: "hidden",
   background:
-    "linear-gradient(135deg, #09001a 0%, #06115C 100%, #03071f 100%)",
+    "linear-gradient(135deg, #0a001b 0%, #06115C 100%, #03071f 100%)",
 
   "@keyframes flowBackgroundA": {
     "0%": {
@@ -428,7 +428,7 @@ export default function Home() {
     position: "absolute",
     inset: "-18%",
     background:
-      "radial-gradient(circle at 8% 18%, rgba(170, 60, 255, 0.5), transparent 24%), radial-gradient(circle at 22% 76%, rgba(31, 137, 255, 0.5), transparent 26%), radial-gradient(circle at 48% 48%, rgba(0, 96, 255, 0.36), transparent 24%), radial-gradient(circle at 78% 24%, rgba(61, 13, 196, 0.5), transparent 30%), radial-gradient(circle at 96% 70%, rgba(98, 0, 255, 0.28), transparent 24%)",
+      "radial-gradient(circle at 8% 18%, rgba(76, 20, 141, 0.44), transparent 24%), radial-gradient(circle at 22% 76%, rgba(31, 137, 255, 0.5), transparent 26%), radial-gradient(circle at 48% 48%, rgba(0, 96, 255, 0.36), transparent 24%), radial-gradient(circle at 78% 24%, rgba(61, 13, 196, 0.5), transparent 30%), radial-gradient(circle at 96% 70%, rgba(98, 0, 255, 0.28), transparent 24%)",
     filter: "blur(42px)",
     opacity: 0.95,
     animation: "flowBackgroundA 12s ease-in-out infinite alternate",
@@ -440,7 +440,7 @@ export default function Home() {
     position: "absolute",
     inset: "-24%",
     background:
-      "radial-gradient(circle at 0% 50%, rgba(92, 35, 255, 0.22), transparent 24%), radial-gradient(circle at 32% 20%, rgba(221, 68, 255, 0.22), transparent 25%), radial-gradient(circle at 58% 78%, rgba(34, 128, 255, 0.28), transparent 26%), radial-gradient(circle at 88% 42%, rgba(0, 70, 255, 0.24), transparent 28%)",
+      "radial-gradient(circle at 0% 50%, rgba(92, 35, 255, 0.22), transparent 24%), radial-gradient(circle at 32% 20%, rgba(183, 53, 212, 0.22), transparent 25%), radial-gradient(circle at 58% 78%, rgba(34, 128, 255, 0.28), transparent 26%), radial-gradient(circle at 88% 42%, rgba(0, 70, 255, 0.24), transparent 28%)",
     filter: "blur(62px)",
     opacity: 0.9,
     animation: "flowBackgroundB 15s ease-in-out infinite alternate",
@@ -453,7 +453,7 @@ export default function Home() {
           position: "absolute",
           inset: 0,
           background:
-            "linear-gradient(90deg, rgba(5, 8, 20, 0.22), rgba(5, 8, 20, 0.34)), radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.48) 88%)",
+            "linear-gradient(90deg, rgba(8, 20, 58, 0.22), rgba(14, 21, 51, 0.34)), radial-gradient(circle at center, transparent 0%, rgba(0, 0, 41, 0.48) 88%)",
           pointerEvents: "none",
           zIndex: 0
         }}
