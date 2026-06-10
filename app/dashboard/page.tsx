@@ -419,20 +419,68 @@ export default function DashboardPage() {
     }
   ];
 
-  const temperatureHistory = history.map((item) => ({
-    time: item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
-    value: item.temperature ?? 0
-  }));
+  function getDailyAverages(items: FishTankReading[]) {
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
 
-  const turbidityHistory = history.map((item) => ({
-    time: item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
-    value: item.turbidity ?? 0
-  }));
+  const grouped: Record<
+    string,
+    {
+      temperatureTotal: number;
+      waterLevelTotal: number;
+      turbidityTotal: number;
+      count: number;
+    }
+  > = {};
 
-  const waterLevelHistory = history.map((item) => ({
-    time: item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
-    value: item.waterLevel ?? 0
+  items
+    .filter((item) => item.timestamp && item.timestamp >= sevenDaysAgo)
+    .forEach((item) => {
+      const date = new Date(item.timestamp as number);
+      const day = date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric"
+      });
+
+      if (!grouped[day]) {
+        grouped[day] = {
+          temperatureTotal: 0,
+          waterLevelTotal: 0,
+          turbidityTotal: 0,
+          count: 0
+        };
+      }
+
+      grouped[day].temperatureTotal += item.temperature ?? 0;
+      grouped[day].waterLevelTotal += item.waterLevel ?? 0;
+      grouped[day].turbidityTotal += item.turbidity ?? 0;
+      grouped[day].count += 1;
+    });
+
+  return Object.entries(grouped).map(([time, values]) => ({
+    time,
+    temperature: Number((values.temperatureTotal / values.count).toFixed(2)),
+    waterLevel: Number((values.waterLevelTotal / values.count).toFixed(2)),
+    turbidity: Number((values.turbidityTotal / values.count).toFixed(2))
   }));
+}
+
+const dailyAverages = getDailyAverages(history);
+
+const temperatureHistory = dailyAverages.map((item) => ({
+  time: item.time,
+  value: item.temperature
+}));
+
+const turbidityHistory = dailyAverages.map((item) => ({
+  time: item.time,
+  value: item.turbidity
+}));
+
+const waterLevelHistory = dailyAverages.map((item) => ({
+  time: item.time,
+  value: item.waterLevel
+}));
 
   return (
     <AppPageShell
@@ -525,7 +573,7 @@ export default function DashboardPage() {
         <SensorLineChart
           title="Temperature over time"
           description="Daily temperature trend from morning to evening."
-          data={temperatureHistory.length > 1 ? temperatureHistory : temperatureData}
+          data={temperatureHistory.length > 0 ? temperatureHistory : temperatureData}
           unit="°C"
           color="#55F2C2"
           min={23.8}
@@ -535,7 +583,7 @@ export default function DashboardPage() {
         <SensorLineChart
           title="Turbidity over time"
           description="Higher values can indicate cloudy water after feeding."
-          data={turbidityHistory.length > 1 ? turbidityHistory : turbidityData}
+          data={turbidityHistory.length > 0 ? turbidityHistory : turbidityData}
           unit=" NTU"
           color="#A735FF"
           min={0}
@@ -545,7 +593,7 @@ export default function DashboardPage() {
         <SensorLineChart
           title="Water level over time"
           description="Water level slowly decreases during the day."
-          data={waterLevelHistory.length > 1 ? waterLevelHistory : waterLevelData}
+          data={waterLevelHistory.length > 0 ? waterLevelHistory : waterLevelData}
           unit="%"
           color="#1E7BFF"
           min={80}
