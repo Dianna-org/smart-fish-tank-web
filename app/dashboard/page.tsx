@@ -1,6 +1,5 @@
 "use client";
 
-// Added fo AWS Cloud
 import { useEffect, useState } from "react";
 
 import {
@@ -13,7 +12,6 @@ import {
 } from "@mui/icons-material";
 import {
   Box,
-  Button,
   Card,
   CardContent,
   Stack,
@@ -21,7 +19,6 @@ import {
 } from "@mui/material";
 import AppPageShell from "../components/AppPageShell";
 
-// Added for AWS Cloud
 const API_URL = "https://aa18r6g19f.execute-api.eu-north-1.amazonaws.com";
 
 type FishTankReading = {
@@ -32,76 +29,17 @@ type FishTankReading = {
   turbidity?: number;
 };
 
-const metrics = [
-  {
-    label: "Temperature",
-    value: "24.8°C",
-    status: "Stable",
-    icon: <DeviceThermostatRounded />,
-    color: "#55F2C2"
-  },
-  {
-    label: "Turbidity",
-    value: "Low",
-    status: "Clear water",
-    icon: <OpacityRounded />,
-    color: "#A735FF"
-  },
-  {
-    label: "Water Level",
-    value: "91%",
-    status: "Enough",
-    icon: <WaterDropRounded />,
-    color: "#1E7BFF"
-  }
-];
-
-const temperatureData = [
-  { time: "08:00", value: 24.1 },
-  { time: "10:00", value: 24.3 },
-  { time: "12:00", value: 24.6 },
-  { time: "14:00", value: 24.8 },
-  { time: "16:00", value: 24.7 },
-  { time: "18:00", value: 24.5 },
-  { time: "20:00", value: 24.4 }
-];
-
-const turbidityData = [
-  { time: "08:00", value: 18 },
-  { time: "10:00", value: 20 },
-  { time: "12:00", value: 28 },
-  { time: "14:00", value: 34 },
-  { time: "16:00", value: 30 },
-  { time: "18:00", value: 24 },
-  { time: "20:00", value: 21 }
-];
-
-const waterLevelData = [
-  { time: "08:00", value: 94 },
-  { time: "10:00", value: 93 },
-  { time: "12:00", value: 92 },
-  { time: "14:00", value: 92 },
-  { time: "16:00", value: 91 },
-  { time: "18:00", value: 91 },
-  { time: "20:00", value: 90 }
-];
-
-const feedingEvents = [
-  { time: "08:30", type: "Scheduled", amount: "Small portion" },
-  { time: "13:15", type: "Manual", amount: "Quick feed" },
-  { time: "19:00", type: "Scheduled", amount: "Small portion" }
-];
-
-const activity = [
-  "Temperature stayed between 24.1°C and 24.8°C today.",
-  "Turbidity increased after feeding, then started to return toward normal.",
-  "Water level slowly decreased from 94% to 90%.",
-  "The feeder was used 3 times today."
-];
-
 type ChartPoint = {
   time: string;
   value: number;
+};
+
+type DailyAverage = {
+  time: string;
+  timestamp: number;
+  temperature: number | null;
+  waterLevel: number | null;
+  turbidity: number | null;
 };
 
 type SensorLineChartProps = {
@@ -113,6 +51,165 @@ type SensorLineChartProps = {
   min: number;
   max: number;
 };
+
+const feedingEvents = [
+  { time: "08:30", type: "Scheduled", amount: "Small portion" },
+  { time: "13:15", type: "Manual", amount: "Quick feed" },
+  { time: "19:00", type: "Scheduled", amount: "Small portion" }
+];
+
+const activity = [
+  "Temperature, turbidity and water level are collected from the Raspberry Pi sensors.",
+  "Each reading is sent through AWS IoT Core and stored in DynamoDB.",
+  "The charts show daily averages for the last 7 days.",
+  "The feeder activity is shown separately from the sensor readings."
+];
+
+function getNumber(value: unknown) {
+  const numberValue = Number(value);
+
+  if (Number.isFinite(numberValue)) {
+    return numberValue;
+  }
+
+  return null;
+}
+
+function formatValue(value: number) {
+  if (Number.isInteger(value)) {
+    return value.toString();
+  }
+
+  return value.toFixed(2);
+}
+
+function getChartRange(data: ChartPoint[]) {
+  if (!data.length) {
+    return {
+      min: 0,
+      max: 1
+    };
+  }
+
+  const values = data.map((point) => point.value);
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+
+  if (minimum === maximum) {
+    return {
+      min: minimum - 1,
+      max: maximum + 1
+    };
+  }
+
+  const padding = (maximum - minimum) * 0.15;
+
+  return {
+    min: minimum - padding,
+    max: maximum + padding
+  };
+}
+
+function getDailyAverages(items: FishTankReading[]) {
+  if (!items.length) {
+    return [];
+  }
+
+  const timestamps = items
+    .map((item) => getNumber(item.timestamp))
+    .filter((timestamp): timestamp is number => timestamp !== null);
+
+  if (!timestamps.length) {
+    return [];
+  }
+
+  const newestTimestamp = Math.max(...timestamps);
+  const sevenDaysAgo = newestTimestamp - 6 * 24 * 60 * 60 * 1000;
+
+  const grouped: Record<
+    string,
+    {
+      timestamp: number;
+      temperatureTotal: number;
+      temperatureCount: number;
+      waterLevelTotal: number;
+      waterLevelCount: number;
+      turbidityTotal: number;
+      turbidityCount: number;
+    }
+  > = {};
+
+  items
+    .filter((item) => {
+      const timestamp = getNumber(item.timestamp);
+
+      return timestamp !== null && timestamp >= sevenDaysAgo;
+    })
+    .forEach((item) => {
+      const timestamp = getNumber(item.timestamp);
+
+      if (timestamp === null) {
+        return;
+      }
+
+      const date = new Date(timestamp);
+      const day = date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric"
+      });
+
+      if (!grouped[day]) {
+        grouped[day] = {
+          timestamp,
+          temperatureTotal: 0,
+          temperatureCount: 0,
+          waterLevelTotal: 0,
+          waterLevelCount: 0,
+          turbidityTotal: 0,
+          turbidityCount: 0
+        };
+      }
+
+      const temperature = getNumber(item.temperature);
+      const waterLevel = getNumber(item.waterLevel);
+      const turbidity = getNumber(item.turbidity);
+
+      if (temperature !== null) {
+        grouped[day].temperatureTotal += temperature;
+        grouped[day].temperatureCount += 1;
+      }
+
+      if (waterLevel !== null) {
+        grouped[day].waterLevelTotal += waterLevel;
+        grouped[day].waterLevelCount += 1;
+      }
+
+      if (turbidity !== null) {
+        grouped[day].turbidityTotal += turbidity;
+        grouped[day].turbidityCount += 1;
+      }
+    });
+
+  return Object.entries(grouped)
+    .map(([time, values]) => ({
+      time,
+      timestamp: values.timestamp,
+      temperature:
+        values.temperatureCount > 0
+          ? Number((values.temperatureTotal / values.temperatureCount).toFixed(2))
+          : null,
+      waterLevel:
+        values.waterLevelCount > 0
+          ? Number((values.waterLevelTotal / values.waterLevelCount).toFixed(2))
+          : null,
+      turbidity:
+        values.turbidityCount > 0
+          ? Number((values.turbidityTotal / values.turbidityCount).toFixed(2))
+          : null
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .slice(-7);
+}
 
 function SensorLineChart({
   title,
@@ -128,19 +225,102 @@ function SensorLineChart({
   const paddingX = 36;
   const paddingY = 28;
 
+  if (!data.length) {
+    return (
+      <Card>
+        <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+          <Stack
+            direction="row"
+            sx={{
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 2,
+              mb: 2.5
+            }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  color: "#FFFFFF",
+                  fontSize: { xs: 24, md: 30 },
+                  fontWeight: 950,
+                  letterSpacing: "-0.06em"
+                }}
+              >
+                {title}
+              </Typography>
+
+              <Typography
+                sx={{
+                  color: "rgba(247, 248, 255, 0.62)",
+                  lineHeight: 1.6,
+                  mt: 0.5
+                }}
+              >
+                {description}
+              </Typography>
+            </Box>
+
+            <TimelineRounded sx={{ color, fontSize: 32 }} />
+          </Stack>
+
+          <Box
+            sx={{
+              borderRadius: "28px",
+              background: "rgba(2, 6, 24, 0.36)",
+              p: 3,
+              minHeight: { xs: 220, md: 260 },
+              display: "grid",
+              placeItems: "center",
+              textAlign: "center"
+            }}
+          >
+            <Typography
+              sx={{
+                color: "rgba(247,248,255,0.7)",
+                fontWeight: 800
+              }}
+            >
+              Waiting for history data from AWS...
+            </Typography>
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const safeMin = Number.isFinite(min) ? min : 0;
+  const safeMax = Number.isFinite(max) && max !== safeMin ? max : safeMin + 1;
+
+  function getX(index: number) {
+    return (
+      paddingX +
+      (data.length === 1 ? 0.5 : index / (data.length - 1)) *
+        (width - paddingX * 2)
+    );
+  }
+
+  function getY(value: number) {
+    return (
+      height -
+      paddingY -
+      ((value - safeMin) / (safeMax - safeMin)) * (height - paddingY * 2)
+    );
+  }
+
   const points = data
     .map((point, index) => {
-      const x =
-        paddingX +
-        (index / (data.length - 1)) * (width - paddingX * 2);
-      const y =
-        height -
-        paddingY -
-        ((point.value - min) / (max - min)) * (height - paddingY * 2);
+      const x = getX(index);
+      const y = getY(point.value);
 
       return `${x},${y}`;
     })
     .join(" ");
+
+  const values = data.map((point) => point.value);
+  const currentValue = values[values.length - 1];
+  const minimumValue = Math.min(...values);
+  const maximumValue = Math.max(...values);
 
   return (
     <Card>
@@ -225,17 +405,11 @@ function SensorLineChart({
             />
 
             {data.map((point, index) => {
-              const x =
-                paddingX +
-                (index / (data.length - 1)) * (width - paddingX * 2);
-              const y =
-                height -
-                paddingY -
-                ((point.value - min) / (max - min)) *
-                  (height - paddingY * 2);
+              const x = getX(index);
+              const y = getY(point.value);
 
               return (
-                <g key={point.time}>
+                <g key={`${point.time}-${index}`}>
                   <circle
                     cx={x}
                     cy={y}
@@ -301,7 +475,7 @@ function SensorLineChart({
                   letterSpacing: "-0.04em"
                 }}
               >
-                {data[data.length - 1].value}
+                {formatValue(currentValue)}
                 {unit}
               </Typography>
             </Box>
@@ -331,7 +505,7 @@ function SensorLineChart({
                   letterSpacing: "-0.04em"
                 }}
               >
-                {Math.min(...data.map((point) => point.value))}
+                {formatValue(minimumValue)}
                 {unit}
               </Typography>
             </Box>
@@ -361,7 +535,7 @@ function SensorLineChart({
                   letterSpacing: "-0.04em"
                 }}
               >
-                {Math.max(...data.map((point) => point.value))}
+                {formatValue(maximumValue)}
                 {unit}
               </Typography>
             </Box>
@@ -372,21 +546,24 @@ function SensorLineChart({
   );
 }
 
-// Modified for AWS Cloud
 export default function DashboardPage() {
   const [latest, setLatest] = useState<FishTankReading | null>(null);
   const [history, setHistory] = useState<FishTankReading[]>([]);
 
   useEffect(() => {
     async function loadData() {
-      const latestResponse = await fetch(`${API_URL}/latest`);
-      const latestData = await latestResponse.json();
+      try {
+        const latestResponse = await fetch(`${API_URL}/latest`);
+        const latestData = await latestResponse.json();
 
-      const historyResponse = await fetch(`${API_URL}/history`);
-      const historyData = await historyResponse.json();
+        const historyResponse = await fetch(`${API_URL}/history`);
+        const historyData = await historyResponse.json();
 
-      setLatest(latestData);
-      setHistory(Array.isArray(historyData) ? historyData.reverse() : []);
+        setLatest(latestData);
+        setHistory(Array.isArray(historyData) ? historyData : []);
+      } catch (error) {
+        console.error("Failed to load fish tank data", error);
+      }
     }
 
     loadData();
@@ -394,6 +571,33 @@ export default function DashboardPage() {
 
     return () => clearInterval(interval);
   }, []);
+
+  const dailyAverages: DailyAverage[] = getDailyAverages(history);
+
+  const temperatureHistory = dailyAverages
+    .filter((item) => item.temperature !== null)
+    .map((item) => ({
+      time: item.time,
+      value: item.temperature as number
+    }));
+
+  const turbidityHistory = dailyAverages
+    .filter((item) => item.turbidity !== null)
+    .map((item) => ({
+      time: item.time,
+      value: item.turbidity as number
+    }));
+
+  const waterLevelHistory = dailyAverages
+    .filter((item) => item.waterLevel !== null)
+    .map((item) => ({
+      time: item.time,
+      value: item.waterLevel as number
+    }));
+
+  const temperatureRange = getChartRange(temperatureHistory);
+  const turbidityRange = getChartRange(turbidityHistory);
+  const waterLevelRange = getChartRange(waterLevelHistory);
 
   const liveMetrics = [
     {
@@ -405,7 +609,7 @@ export default function DashboardPage() {
     },
     {
       label: "Turbidity",
-      value: latest?.turbidity !== undefined ? `${latest.turbidity} NTU` : "—",
+      value: latest?.turbidity !== undefined ? `${latest.turbidity} raw` : "—",
       status: "Live from AWS",
       icon: <OpacityRounded />,
       color: "#A735FF"
@@ -418,69 +622,6 @@ export default function DashboardPage() {
       color: "#1E7BFF"
     }
   ];
-
-  function getDailyAverages(items: FishTankReading[]) {
-  const now = Date.now();
-  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-
-  const grouped: Record<
-    string,
-    {
-      temperatureTotal: number;
-      waterLevelTotal: number;
-      turbidityTotal: number;
-      count: number;
-    }
-  > = {};
-
-  items
-    .filter((item) => item.timestamp && item.timestamp >= sevenDaysAgo)
-    .forEach((item) => {
-      const date = new Date(item.timestamp as number);
-      const day = date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric"
-      });
-
-      if (!grouped[day]) {
-        grouped[day] = {
-          temperatureTotal: 0,
-          waterLevelTotal: 0,
-          turbidityTotal: 0,
-          count: 0
-        };
-      }
-
-      grouped[day].temperatureTotal += item.temperature ?? 0;
-      grouped[day].waterLevelTotal += item.waterLevel ?? 0;
-      grouped[day].turbidityTotal += item.turbidity ?? 0;
-      grouped[day].count += 1;
-    });
-
-  return Object.entries(grouped).map(([time, values]) => ({
-    time,
-    temperature: Number((values.temperatureTotal / values.count).toFixed(2)),
-    waterLevel: Number((values.waterLevelTotal / values.count).toFixed(2)),
-    turbidity: Number((values.turbidityTotal / values.count).toFixed(2))
-  }));
-}
-
-const dailyAverages = getDailyAverages(history);
-
-const temperatureHistory = dailyAverages.map((item) => ({
-  time: item.time,
-  value: item.temperature
-}));
-
-const turbidityHistory = dailyAverages.map((item) => ({
-  time: item.time,
-  value: item.turbidity
-}));
-
-const waterLevelHistory = dailyAverages.map((item) => ({
-  time: item.time,
-  value: item.waterLevel
-}));
 
   return (
     <AppPageShell
@@ -572,32 +713,32 @@ const waterLevelHistory = dailyAverages.map((item) => ({
       >
         <SensorLineChart
           title="Temperature over time"
-          description="Daily temperature trend from morning to evening."
-          data={temperatureHistory.length > 0 ? temperatureHistory : temperatureData}
+          description="Average temperature for each day from the last week."
+          data={temperatureHistory}
           unit="°C"
           color="#55F2C2"
-          min={23.8}
-          max={25.2}
+          min={temperatureRange.min}
+          max={temperatureRange.max}
         />
 
         <SensorLineChart
           title="Turbidity over time"
-          description="Higher values can indicate cloudy water after feeding."
-          data={turbidityHistory.length > 0 ? turbidityHistory : turbidityData}
-          unit=" NTU"
+          description="Average turbidity for each day from the last week."
+          data={turbidityHistory}
+          unit=" raw"
           color="#A735FF"
-          min={0}
-          max={50}
+          min={turbidityRange.min}
+          max={turbidityRange.max}
         />
 
         <SensorLineChart
           title="Water level over time"
-          description="Water level slowly decreases during the day."
-          data={waterLevelHistory.length > 0 ? waterLevelHistory : waterLevelData}
+          description="Average water level for each day from the last week."
+          data={waterLevelHistory}
           unit="%"
           color="#1E7BFF"
-          min={80}
-          max={100}
+          min={waterLevelRange.min}
+          max={waterLevelRange.max}
         />
 
         <Card>
